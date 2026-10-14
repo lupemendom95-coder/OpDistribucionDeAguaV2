@@ -1561,19 +1561,24 @@
         let editResourceId = null;
 
         function initMaps() {
-            // Capas gratuitas y públicas sin restricciones de API Key
+            // Capas públicas y libres de bloqueos (Esri ArcGIS Global Services)
             const darkTilesDash = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+                attribution: 'Tiles &copy; Esri',
                 maxZoom: 16
             });
 
-            const lightTilesDash = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-                maxZoom: 19
+            const lightTilesDash = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri World Street Map',
+                maxZoom: 18
+            });
+
+            const topoTilesDash = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri World Topo Map',
+                maxZoom: 18
             });
 
             const satelliteTilesDash = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri',
+                attribution: 'Tiles &copy; Esri World Imagery',
                 maxZoom: 18
             });
 
@@ -1585,8 +1590,9 @@
             }).setView([19.4326, -99.1332], 11);
 
             L.control.layers({
-                "Modo Oscuro (Esri)": darkTilesDash,
-                "Modo Claro (OpenStreetMap)": lightTilesDash,
+                "Modo Oscuro": darkTilesDash,
+                "Modo Claro (Calles)": lightTilesDash,
+                "Modo Claro (Topográfico)": topoTilesDash,
                 "Satélite": satelliteTilesDash
             }, null, { position: 'topright' }).addTo(dashboardMap);
 
@@ -1596,13 +1602,13 @@
                 maxZoom: 16
             });
 
-            const lightTilesForm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap',
-                maxZoom: 19
+            const lightTilesForm = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri World Street Map',
+                maxZoom: 18
             });
 
             const satelliteTilesForm = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri',
+                attribution: 'Tiles &copy; Esri World Imagery',
                 maxZoom: 18
             });
 
