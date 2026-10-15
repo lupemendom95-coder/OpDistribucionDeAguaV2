@@ -371,23 +371,12 @@
                     </div>
 
                     <div class="bg-slate-950/60 border border-slate-800 rounded-2xl p-4 md:p-6 flex flex-col h-[380px] md:h-[480px]">
-                        <h3 class="text-base md:text-lg font-bold mb-4">Rendimiento Operativo</h3>
-                        <div class="flex-1 flex flex-col justify-between">
-                            <div class="space-y-2">
-                                <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Litros Distribuidos por Camión</h4>
-                                <div class="h-[120px] md:h-[150px] relative">
-                                    <canvas id="chart-litros-unidad"></canvas>
-                                </div>
-                            </div>
-                            <hr class="border-slate-800 my-2" />
-                            <div class="space-y-2">
-                                <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Viajes por Operador</h4>
-                                <div class="h-[120px] md:h-[150px] relative">
-                                    <canvas id="chart-viajes-operador"></canvas>
-                                </div>
-                            </div>
-                        </div>
+                        <h3 class="text-base md:text-lg font-bold mb-2">Rendimiento Operativo</h3>
+                        <p class="text-[10px] md:text-xs text-slate-400 mb-4">Litros Distribuidos por Camión (Solo unidades activas)</p>
+                        <div class="flex-1 relative min-h-[250px] w-full">
+                            <canvas id="chart-litros-unidad"></canvas>
                     </div>
+    </div>
                 </div>
             </div>
 
@@ -2049,57 +2038,77 @@
 
         // --- GRÁFICAS DE RENDIMIENTO ---
         function renderDashboardCharts() {
-            const ctxLitros = document.getElementById('chart-litros-unidad').getContext('2d');
-            const ctxViajes = document.getElementById('chart-viajes-operador').getContext('2d');
+          const canvasElement = document.getElementById('chart-litros-unidad');
+    if (!canvasElement) return;
 
-            const filtered = getFilteredViajes();
+    const ctxLitros = canvasElement.getContext('2d');
+    const filtered = getFilteredViajes();
 
-            const litrosPorUnidad = {}; baseUnidades.forEach(u => litrosPorUnidad[u.economico] = 0);
-            filtered.forEach(v => { litrosPorUnidad[v.economico] = (litrosPorUnidad[v.economico] || 0) + parseFloat(v.litros || 0); });
+    // Sumar litros únicamente por cada económico presente en los datos filtrados
+    const litrosPorUnidad = {};
+    filtered.forEach(v => {
+        const eco = String(v.economico || '').trim();
+        if (eco) {
+            const litros = parseFloat(v.litros || 0);
+            litrosPorUnidad[eco] = (litrosPorUnidad[eco] || 0) + litros;
+        }
+    });
 
-            const viajesPorOperador = {}; baseUsuarios.filter(u => u.rol === 'operador').forEach(op => { viajesPorOperador[op.nombre] = 0; });
-            filtered.forEach(v => { viajesPorOperador[v.operador] = (viajesPorOperador[v.operador] || 0) + parseFloat(v.viajesRealizados || 0); });
+    // Filtrar para conservar solo pipas con entregas mayores a 0 litros
+    const activeUnits = Object.keys(litrosPorUnidad).filter(eco => litrosPorUnidad[eco] > 0);
+    const activeValues = activeUnits.map(eco => litrosPorUnidad[eco]);
 
-            if (chartLitrosUnidad) chartLitrosUnidad.destroy();
-            if (chartViajesOperador) chartViajesOperador.destroy();
+    // Colores dinámicos
+    const uColors = activeUnits.map((_, i) => CONTRAST_COLORS[i % CONTRAST_COLORS.length]);
 
-            const uKeys = Object.keys(litrosPorUnidad);
-            const uColors = uKeys.map((_, i) => CONTRAST_COLORS[i % CONTRAST_COLORS.length]);
+    // Limpiar gráfica anterior
+    if (chartLitrosUnidad) {
+        chartLitrosUnidad.destroy();
+    }
 
-            const opKeys = Object.keys(viajesPorOperador);
-            const opColors = opKeys.map((_, i) => CONTRAST_COLORS[(i + 4) % CONTRAST_COLORS.length]);
-
-            chartLitrosUnidad = new Chart(ctxLitros, {
-                type: 'bar',
-                data: { 
-                    labels: uKeys.map(k => `Eco-${k}`), 
-                    datasets: [{ 
-                        data: Object.values(litrosPorUnidad), 
-                        backgroundColor: uColors 
-                    }] 
-                },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false, 
-                    plugins: { legend: { display: false } } 
+    // Renderizar únicamente la gráfica de litros por camión
+    chartLitrosUnidad = new Chart(ctxLitros, {
+        type: 'bar',
+        data: { 
+            labels: activeUnits.map(k => `Eco-${k}`), 
+            datasets: [{ 
+                label: 'Litros Distribuidos',
+                data: activeValues, 
+                backgroundColor: uColors,
+                borderRadius: 8,
+                borderSkipped: false
+            }] 
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { 
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return ` Total: ${context.parsed.y.toLocaleString('es-MX')} L`;
+                        }
+                    }
                 }
-            });
-
-            chartViajesOperador = new Chart(ctxViajes, {
-                type: 'doughnut',
-                data: { 
-                    labels: opKeys.map(n => n.split(' ')[0]), 
-                    datasets: [{ 
-                        data: Object.values(viajesPorOperador), 
-                        backgroundColor: opColors 
-                    }] 
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#94a3b8', font: { size: 11, weight: 'bold' } },
+                    grid: { display: false }
                 },
-                options: { 
-                    responsive: true, 
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } } 
+                y: {
+                    ticks: { 
+                        color: '#94a3b8',
+                        callback: function(value) {
+                            return value.toLocaleString('es-MX') + ' L';
+                        }
+                    },
+                    grid: { color: 'rgba(51, 65, 85, 0.3)' }
                 }
-            });
+            }
+        }
+    });
         }
 
         let customChartInstance = null;
@@ -3052,170 +3061,169 @@
 
         // --- SINCRONIZACIÓN ASÍNCRONA CON RESOLUCIÓN SEGURA DE OPERATIVOS ---
         function forceSync() {
-            const cleanedUrl = (configApiUrl || '').trim();
-            if (!cleanedUrl) return;
-            
-            const syncIcon = document.getElementById('sync-icon');
-            const syncIconMobile = document.getElementById('sync-icon-mobile');
-            if (syncIcon) syncIcon.classList.add('animate-spin');
-            if (syncIconMobile) syncIconMobile.classList.add('animate-spin');
+                                const cleanedUrl = (configApiUrl || '').trim();
+    if (!cleanedUrl) return;
+    
+    const syncIcon = document.getElementById('sync-icon');
+    const syncIconMobile = document.getElementById('sync-icon-mobile');
+    if (syncIcon) syncIcon.classList.add('animate-spin');
+    if (syncIconMobile) syncIconMobile.classList.add('animate-spin');
 
-            const badge = document.getElementById('sync-badge');
-            const badgeText = document.getElementById('sync-badge-text');
-            const ping = document.getElementById('sync-ping');
-            const sheetsStatus = document.getElementById('sheets-sync-status');
-            const badgeMobile = document.getElementById('sync-badge-mobile');
+    const badge = document.getElementById('sync-badge');
+    const badgeText = document.getElementById('sync-badge-text');
+    const ping = document.getElementById('sync-ping');
+    const sheetsStatus = document.getElementById('sheets-sync-status');
+    const badgeMobile = document.getElementById('sync-badge-mobile');
+
+    if (badge && badgeText && ping) {
+        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-sky-500/15 text-sky-400 border border-sky-500/30 transition-colors duration-300 animate-pulse";
+        ping.className = "w-2 h-2 rounded-full bg-sky-400 animate-ping";
+        badgeText.innerText = "Sincronizando...";
+    }
+    if (badgeMobile) {
+        badgeMobile.className = "w-3 h-3 rounded-full bg-sky-400 animate-pulse";
+        badgeMobile.title = "Sincronizando...";
+    }
+
+    const separator = cleanedUrl.includes('?') ? '&' : '?';
+    const cleanFetchUrl = `${cleanedUrl}${separator}action=get_all&_t=${Date.now()}`;
+
+    fetch(cleanFetchUrl, { method: 'GET', redirect: 'follow' })
+    .then(res => {
+        if (!res.ok) throw new Error("Servidor Google no responde");
+        return res.json();
+    })
+    .then(cloudData => {
+        if (syncIcon) syncIcon.classList.remove('animate-spin');
+        if (syncIconMobile) syncIconMobile.classList.remove('animate-spin');
+
+        if (cloudData && cloudData.status === "success") {
+            if (Array.isArray(cloudData.operativos)) {
+                baseOperativos = cloudData.operativos.map(op => ({
+                    id: op.ID || op.id || '',
+                    nombre: op.Nombre || op.nombre || '',
+                    tipo: op.Tipo || op.tipo || 'Emergencia',
+                    adscripciones: op.Adscripciones || op.adscripciones || '',
+                    operadores: typeof op.Operadores === 'string' ? op.Operadores.split(',') : (op.operadores || []),
+                    equipos: typeof op.Equipos === 'string' ? op.Equipos.split(',') : (op.equipos || []),
+                    estado: op.Estado || op.estado || '',
+                    municipio: op.Municipio || op.municipio || ''
+                }));
+                localStorage.setItem('h2o_operativos', JSON.stringify(baseOperativos));
+            }
+
+            if (Array.isArray(cloudData.viajes)) {
+                baseViajes = cloudData.viajes.map(v => {
+                    const rawOp = v["Operativo"] || v["ID Operativo"] || v.operativoId || '';
+                    
+                    // Mapeo seguro para números de viajes y litros
+                    const valViajes = parseFloat(v["Viajes"] ?? v["Viajes Realizados"] ?? v.viajesRealizados ?? 1);
+                    const valLitros = parseFloat(v["Litros"] ?? v["Litros Suministrados"] ?? v.litros ?? 0);
+
+                    return {
+                        id: v["ID Viaje"] || v["ID"] || v.id || 'V-000',
+                        operativoId: rawOp,
+                        fecha: v["Fecha y Hora"] || v.fecha || '',
+                        operador: v["Operador"] || v.operador || '',
+                        economico: v["Económico"] || v["Economico"] || v.economico || '',
+                        placa: v["Placa"] || v.placa || '',
+                        ubicacion: v["Ubicación GPS"] || v.ubicacion || '',
+                        viajesRealizados: isNaN(valViajes) ? 1 : valViajes,
+                        litros: isNaN(valLitros) ? 0 : valLitros,
+                        fuenteAbastecimiento: v["Fuente de Abastecimiento"] || v["Fuente de Abas"] || v.fuenteAbastecimiento || '',
+                        tipoInstalacion: v["Tipo de Instalación"] || v["Instalación"] || v.tipoInstalacion || '',
+                        estado: v["Estado"] || v.estado || '',
+                        municipio: v["Municipio"] || v.municipio || '',
+                        colonia: v["Colonia"] || v.colonia || '',
+                        habitantes: parseInt(v["Habitantes"] || v.habitantes || 0),
+                        fotoUrl: v["Fotografía"] || v.fotoUrl || v.fotografia || '',
+                        observaciones: v["Observaciones"] || v.observaciones || ''
+                    };
+                });
+                localStorage.setItem('h2o_viajes', JSON.stringify(baseViajes));
+            }
+
+            if (Array.isArray(cloudData.unidades)) {
+                baseUnidades = cloudData.unidades.map(u => ({
+                    id: u.ID || u.id || '',
+                    economico: String(u.Economico || u.economico || ''),
+                    placa: u.Placa || u.placa || '',
+                    capacidad: parseInt(u.Capacidad || u.capacidad || 0)
+                }));
+                localStorage.setItem('h2o_unidades', JSON.stringify(baseUnidades));
+            }
+
+            if (Array.isArray(cloudData.usuarios) && cloudData.usuarios.length > 0) { 
+                baseUsuarios = cloudData.usuarios.map(u => ({
+                    id: u.id || u.ID || '',
+                    usuario: String(u.usuario || '').toLowerCase(),
+                    clave: String(u.clave || ''),
+                    rol: u.rol || 'operador',
+                    nombre: u.nombre || '',
+                    telefono: u.telefono || '',
+                    unidadAsignada: u.unidadAsignada || '',
+                    activo: u.activo !== false
+                }));
+            }
+            localStorage.setItem('h2o_usuarios', JSON.stringify(baseUsuarios));
+
+            if (Array.isArray(cloudData.tipos_instalacion)) { 
+                baseTiposInstalacion = cloudData.tipos_instalacion.map(t => typeof t === 'object' ? (t.Nombre || t.nombre) : t); 
+                localStorage.setItem('h2o_tipos_instalacion', JSON.stringify(baseTiposInstalacion)); 
+            }
+
+            if (Array.isArray(cloudData.fuentes_abastecimiento)) { 
+                baseFuentesAbastecimiento = cloudData.fuentes_abastecimiento.map(f => typeof f === 'object' ? (f.Nombre || f.nombre) : f); 
+                localStorage.setItem('h2o_fuentes_abastecimiento', JSON.stringify(baseFuentesAbastecimiento)); 
+            }
+
+            if (cloudData.geografia) { 
+                baseGeografia = cloudData.geografia; 
+                localStorage.setItem('h2o_geografia', JSON.stringify(baseGeografia)); 
+            }
+            
+            if (cloudData.brandConfig) {
+                applyBrandSettings(cloudData.brandConfig);
+            }
+
+            renderAll();
 
             if (badge && badgeText && ping) {
-                badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-sky-500/15 text-sky-400 border border-sky-500/30 transition-colors duration-300 animate-pulse";
-                ping.className = "w-2 h-2 rounded-full bg-sky-400 animate-ping";
-                badgeText.innerText = "Sincronizando...";
+                badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 transition-colors duration-300";
+                ping.className = "w-2 h-2 rounded-full bg-emerald-400";
+                badgeText.innerText = "Sincronizado";
             }
             if (badgeMobile) {
-                badgeMobile.className = "w-3 h-3 rounded-full bg-sky-400 animate-pulse";
-                badgeMobile.title = "Sincronizando...";
+                badgeMobile.className = "w-3 h-3 rounded-full bg-emerald-400";
+                badgeMobile.title = "Sincronizado";
             }
+            if (sheetsStatus) {
+                sheetsStatus.innerText = 'Conectado';
+                sheetsStatus.className = 'text-emerald-400 font-mono';
+            }
+            notify('Sincronización Completa', 'Se han cargado correctamente todas las bitácoras del Sheet.', 'success');
+        }
+    })
+    .catch(err => {
+        if (syncIcon) syncIcon.classList.remove('animate-spin');
+        if (syncIconMobile) syncIconMobile.classList.remove('animate-spin');
+        console.error("Sync error:", err);
 
-            const separator = cleanedUrl.includes('?') ? '&' : '?';
-            const cleanFetchUrl = `${cleanedUrl}${separator}action=get_all&_t=${Date.now()}`;
-
-            fetch(cleanFetchUrl, { method: 'GET', redirect: 'follow' })
-            .then(res => {
-                if (!res.ok) throw new Error("Servidor Google no responde");
-                return res.json();
-            })
-            .then(cloudData => {
-                if (syncIcon) syncIcon.classList.remove('animate-spin');
-                if (syncIconMobile) syncIconMobile.classList.remove('animate-spin');
-
-                if (cloudData && cloudData.status === "success") {
-                    if (Array.isArray(cloudData.operativos)) {
-                        baseOperativos = cloudData.operativos.map(op => ({
-                            id: op.ID || op.id || '',
-                            nombre: op.Nombre || op.nombre || '',
-                            tipo: op.Tipo || op.tipo || 'Emergencia',
-                            adscripciones: op.Adscripciones || op.adscripciones || '',
-                            operadores: typeof op.Operadores === 'string' ? op.Operadores.split(',') : (op.operadores || []),
-                            equipos: typeof op.Equipos === 'string' ? op.Equipos.split(',') : (op.equipos || []),
-                            estado: op.Estado || op.estado || '',
-                            municipio: op.Municipio || op.municipio || ''
-                        }));
-                        localStorage.setItem('h2o_operativos', JSON.stringify(baseOperativos));
-                    }
-
-                    if (Array.isArray(cloudData.viajes)) {
-                        baseViajes = cloudData.viajes.map(v => {
-                            const rawOp = v["Operativo"] || v["ID Operativo"] || v.operativoId || v.Operativo || '';
-                            return {
-                                id: v["ID Viaje"] || v.id || v.ID || 'V-000',
-                                operativoId: rawOp,
-                                fecha: v["Fecha y Hora"] || v.fecha || '',
-                                operador: v["Operador"] || v.operador || '',
-                                economico: v["Económico"] || v.economico || '',
-                                placa: v["Placa"] || v.placa || '',
-                                ubicacion: v["Ubicación GPS"] || v.ubicacion || '',
-                                viajesRealizados: parseFloat(v["Viajes Realizados"] || v.viajesRealizados || 1),
-                                litros: parseFloat(v["Litros Suministrados"] || v.litros || 0),
-                                tipoInstalacion: v["Tipo de Instalación"] || v.tipoInstalacion || '',
-                                estado: v["Estado"] || v.estado || '',
-                                municipio: v["Municipio"] || v.municipio || '',
-                                colonia: v["Colonia"] || v.colonia || '',
-                                habitantes: parseInt(v["Habitantes"] || v.habitantes || 0),
-                                fotoUrl: v["Fotografía"] || v.fotoUrl || v.fotografia || '',
-                                observaciones: v["Observaciones"] || v.observaciones || ''
-                            };
-                        });
-                        localStorage.setItem('h2o_viajes', JSON.stringify(baseViajes));
-                    }
-
-                    if (Array.isArray(cloudData.unidades)) {
-                        baseUnidades = cloudData.unidades.map(u => ({
-                            id: u.ID || u.id || '',
-                            economico: String(u.Economico || u.economico || ''),
-                            placa: u.Placa || u.placa || '',
-                            capacidad: parseInt(u.Capacidad || u.capacidad || 0)
-                        }));
-                        localStorage.setItem('h2o_unidades', JSON.stringify(baseUnidades));
-                    }
-
-                    if (Array.isArray(cloudData.usuarios) && cloudData.usuarios.length > 0) { 
-                        baseUsuarios = cloudData.usuarios.map(u => ({
-                            id: u.id || u.ID || '',
-                            usuario: String(u.usuario || '').toLowerCase(),
-                            clave: String(u.clave || ''),
-                            rol: u.rol || 'operador',
-                            nombre: u.nombre || '',
-                            telefono: u.telefono || '',
-                            unidadAsignada: u.unidadAsignada || '',
-                            activo: u.activo !== false
-                        }));
-                    } else {
-                        baseUsuarios = [
-                            { id: 'U-ADMIN', usuario: 'admin', clave: 'agua2026', rol: 'admin', nombre: 'Administrador Principal', activo: true }
-                        ];
-                    }
-                    localStorage.setItem('h2o_usuarios', JSON.stringify(baseUsuarios));
-
-                    if (Array.isArray(cloudData.tipos_instalacion)) { 
-                        baseTiposInstalacion = cloudData.tipos_instalacion.map(t => typeof t === 'object' ? (t.Nombre || t.nombre) : t); 
-                        localStorage.setItem('h2o_tipos_instalacion', JSON.stringify(baseTiposInstalacion)); 
-                    }
-
-                    if (Array.isArray(cloudData.fuentes_abastecimiento)) { 
-                        baseFuentesAbastecimiento = cloudData.fuentes_abastecimiento.map(f => typeof f === 'object' ? (f.Nombre || f.nombre) : f); 
-                        localStorage.setItem('h2o_fuentes_abastecimiento', JSON.stringify(baseFuentesAbastecimiento)); 
-                    }
-
-                    if (cloudData.geografia) { 
-                        baseGeografia = cloudData.geografia; 
-                        localStorage.setItem('h2o_geografia', JSON.stringify(baseGeografia)); 
-                    }
-                    
-                    if (cloudData.brandConfig) {
-                        applyBrandSettings(cloudData.brandConfig);
-                    }
-
-                    renderAll();
-                    
-                    const diagnosticsArea = document.getElementById('diagnostics-test-area');
-                    if (diagnosticsArea) diagnosticsArea.classList.add('hidden');
-
-                    if (badge && badgeText && ping) {
-                        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 transition-colors duration-300";
-                        ping.className = "w-2 h-2 rounded-full bg-emerald-400";
-                        badgeText.innerText = "Sincronizado";
-                    }
-                    if (badgeMobile) {
-                        badgeMobile.className = "w-3 h-3 rounded-full bg-emerald-400";
-                        badgeMobile.title = "Sincronizado";
-                    }
-                    if (sheetsStatus) {
-                        sheetsStatus.innerText = 'Conectado';
-                        sheetsStatus.className = 'text-emerald-400 font-mono';
-                    }
-                    notify('Sincronización Completa', 'Se han cargado correctamente todas las bitácoras del Sheet.', 'success');
-                }
-            })
-            .catch(err => {
-                if (syncIcon) syncIcon.classList.remove('animate-spin');
-                if (syncIconMobile) syncIconMobile.classList.remove('animate-spin');
-                console.error("Sync error:", err);
-
-                if (badge && badgeText && ping) {
-                    badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 transition-colors duration-300";
-                    ping.className = "w-2 h-2 rounded-full bg-rose-400 animate-pulse";
-                    badgeText.innerText = "Error Conexión";
-                }
-                if (badgeMobile) {
-                    badgeMobile.className = "w-3 h-3 rounded-full bg-rose-400 animate-pulse";
-                    badgeMobile.title = "Error Conexión";
-                }
-                if (sheetsStatus) {
-                    sheetsStatus.innerText = 'Error de Red';
-                    sheetsStatus.className = 'text-rose-400 font-mono';
-                }
-                notify('Error de Conexión', 'Ocurrió un detalle al procesar la respuesta del servidor.', 'error');
-            });
+        if (badge && badgeText && ping) {
+            badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 transition-colors duration-300";
+            ping.className = "w-2 h-2 rounded-full bg-rose-400 animate-pulse";
+            badgeText.innerText = "Error Conexión";
+        }
+        if (badgeMobile) {
+            badgeMobile.className = "w-3 h-3 rounded-full bg-rose-400 animate-pulse";
+            badgeMobile.title = "Error Conexión";
+        }
+        if (sheetsStatus) {
+            sheetsStatus.innerText = 'Error de Red';
+            sheetsStatus.className = 'text-rose-400 font-mono';
+        }
+        notify('Error de Conexión', 'Ocurrió un detalle al procesar la respuesta del servidor.', 'error');
+    });
         }
 
         // --- PREVISUALIZADOR MULTI-IMAGEN ---
